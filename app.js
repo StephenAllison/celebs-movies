@@ -1,21 +1,23 @@
 require('dotenv').config();
 
-const bodyParser   = require('body-parser');
-const cookieParser = require('cookie-parser');
-const express      = require('express');
-const favicon      = require('serve-favicon');
-const hbs          = require('hbs');
-const mongoose     = require('mongoose');
-const logger       = require('morgan');
-const path         = require('path');
+const bodyParser     = require('body-parser');
+const cookieParser   = require('cookie-parser');
+const express        = require('express');
+const favicon        = require('serve-favicon');
+const hbs            = require('hbs');
+const mongoose       = require('mongoose');
+const logger         = require('morgan');
+const path           = require('path');
+const passport       = require('passport');
+const GoogleStrategy = require("passport-google-oauth").OAuth2Strategy;
+const session        = require("express-session");
+const User           = require('./models/User')
 
-const session    = require("express-session");
-const MongoStore = require("connect-mongo")(session);
 
 
 mongoose.Promise = Promise;
 mongoose
-  .connect('mongodb://localhost/celebs-and-movies', {useMongoClient: true})
+  .connect('mongodb://localhost/social-login-example', {useMongoClient: true})
   .then(() => {
     console.log('Connected to Mongo!')
   }).catch(err => {
@@ -35,9 +37,6 @@ app.use(cookieParser());
 
 // Express View engine setup
 
-
-
-
 app.use(require('node-sass-middleware')({
   src:  path.join(__dirname, 'public'),
   dest: path.join(__dirname, 'public'),
@@ -45,21 +44,68 @@ app.use(require('node-sass-middleware')({
 }));
       
 
-app.use(session({
-  secret: "basic-auth-secret",
-  cookie: { maxAge: 60000 },
-  store: new MongoStore({
-    mongooseConnection: mongoose.connection,
-    ttl: 24 * 60 * 60 
-  })
-}));
-
-
-
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'hbs');
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(favicon(path.join(__dirname, 'public', 'images', 'favicon.ico')));
+
+
+app.use(session({
+  secret: "our-passport-local-strategy-app",
+  resave: true,
+  saveUninitialized: true
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+
+
+
+passport.serializeUser((user, cb) => {
+  cb(null, user._id);
+});
+
+passport.deserializeUser((id, cb) => {
+  User.findById(id, (err, user) => {
+    if (err) { return cb(err); }
+    cb(null, user);
+  });
+});
+
+
+
+
+
+passport.use(new GoogleStrategy({
+  clientID: process.env.google_client_id,
+  clientSecret: process.env.google_client_secret,
+  callbackURL: "/auth/google/callback"
+}, (accessToken, refreshToken, profile, done) => {
+  User.findOne({ googleID: profile.id })
+  .then((user, err) => {
+    if (err) {
+      return done(err);
+    }
+    if (user) {
+      return done(null, user);
+    }
+
+    const newUser = new User({
+      googleID: profile.id
+    });
+
+    newUser.save()
+    .then(user => {
+      done(null, newUser);
+    })
+  })
+  .catch(error => {
+    console.log(error)
+  })
+
+}));
+
 
 
 
@@ -70,18 +116,6 @@ app.locals.title = 'Express - Generated with IronGenerator';
 
 const index = require('./routes/index');
 app.use('/', index);
-
-
-const celebrityRoutesFile = require('./routes/celebrities');
-app.use('/', celebrityRoutesFile);
-
-
-const movies = require('./routes/movies');
-app.use('/', movies);
-
-
-const theUserRoutes = require('./routes/authRoutes')
-app.use('/', theUserRoutes)
 
 
 module.exports = app;
