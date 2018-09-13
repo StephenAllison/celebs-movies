@@ -15,10 +15,9 @@ const User           = require('./models/User')
 const MongoStore = require("connect-mongo")(session);
 
 
-
 mongoose.Promise = Promise;
 mongoose
-  .connect('mongodb://localhost/social-login-example', {useMongoClient: true})
+  .connect('mongodb://localhost/celebs-and-movies', {useMongoClient: true})
   .then(() => {
     console.log('Connected to Mongo!')
   }).catch(err => {
